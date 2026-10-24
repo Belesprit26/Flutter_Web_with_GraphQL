@@ -1,0 +1,30 @@
+# Dart / Flutter
+.dart_tool/
+build/
+coverage/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# IDE and OS
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Secrets and credentials - never committed
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+key.properties
+serviceAccountKey*.json
+google-services.json
+GoogleService-Info.plist
+.firebaserc

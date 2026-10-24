@@ -1,0 +1,13 @@
+name: graphql_api
+description: GraphQL schema, operations, generated types and the client factory.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  local_backend: ^0.1.0
+  test: ^1.25.6

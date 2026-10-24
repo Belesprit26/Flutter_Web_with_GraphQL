@@ -1,0 +1,12 @@
+name: local_backend
+description: In-app GraphQL server - resolvers, order state machine and simulated payment gateway.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

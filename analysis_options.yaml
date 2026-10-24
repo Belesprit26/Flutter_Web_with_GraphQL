@@ -1,0 +1,19 @@
+# Shared analysis settings. Every package in the workspace includes this file;
+# the Flutter packages layer flutter_lints on top of it.
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    # No implicit dynamic anywhere. App code works with generated GraphQL
+    # types, and these are what keep that true rather than hoped for.
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    - avoid_dynamic_calls
+    - cancel_subscriptions
+    - prefer_final_locals
+    - prefer_single_quotes
+    - unawaited_futures

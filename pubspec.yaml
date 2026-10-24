@@ -1,0 +1,12 @@
+name: _
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+workspace:
+  - apps/checkout_app
+  - packages/checkout_feature
+  - packages/design_system
+  - packages/graphql_api
+  - packages/local_backend
