@@ -38,3 +38,43 @@ what turns that into an analyzer error instead of a promise.
 **One script for the checks** Pub workspaces don't have a root test command, so
 tool/test_all.sh walks the packages - analyze, then test, stop on the first
 failure. That's what runs before every commit.
+
+## Step 1 — Contract and codegen
+
+**Codegen first** The generator was the one real unknown, so it went first.
+ferry's generator holds the whole workspace on an older analyzer - build_runner
+2.15 and test 1.31 instead of the latest - and I used AI to check those
+constraints on pub.dev before adding it, so it generated on the first run. The
+fallback was graphql_codegen, but it sits behind the same limit, so it would
+only have helped with a problem specific to ferry.
+
+**The schema lives in the repo** schema.graphql in graphql_api is the source of
+truth. The client types are generated from it and the in-app server has to
+answer in its shape. Money is Int cents everywhere, never Float. Timestamps are
+ISO strings that become DateTime in the data layer - a custom scalar would be a
+serializer and a codegen config for one type.
+
+**One status vocabulary** HOLD_PENDING, HOLD_PLACED and HOLD_FAILED are defined
+once in the schema, and the server's state machine and the domain enum will use
+those words as they are. Nothing to translate between layers means nothing to
+drift.
+
+**Snapshots don't get an id** BookedSlot and CardSnapshot are their own types
+with no id on purpose. ferry's cache merges anything with the same id, so if an
+order's slot pointed at the live Slot, the order would change when that slot's
+availability did. Without an id they stay embedded under their order, which is
+what a receipt should do. The flip side is OrderEvent - it has an id, so those
+ids have to be unique across every order.
+
+**Generated code is committed** A fresh clone runs without build_runner.
+tool/check_codegen.sh regenerates and fails if anything differs, so the files
+can't quietly go stale. With a schema, 6 operations and nested types the
+generated code earns its keep - a server and client that disagree is a compile
+error.
+
+**The first contract test had to fail properly** Services goes through the real
+ferry client and the real in-app link and has to come back as GServicesData. I
+checked it actually catches drift by dropping priceCents from the server. The
+first version just hung for 30 seconds - ferry turns a response that doesn't fit
+the types into an error rather than data, and the test was waiting for data. Now
+it stops on the first error and names the field.
