@@ -173,3 +173,38 @@ writes subscription results to its cache while something is listening, and that
 cache write is what makes the query show the new status. The page doesn't know
 any of that - it gets orders. It only gets told "not found" once the server has
 said so, never while it's still loading.
+
+## Step 4 — Routing and sign-in
+
+**go_router this time** Order links have to load on their own, survive a
+refresh and come back after sign-in, so URL routing is the requirement here and
+not a nice-to-have. go_router with path URLs, no #. It's pinned to 17 - 18 moved
+onto the new standalone Material package, which is a change across the whole app
+for nothing the routing needs. Upgrading later is a version bump and a dart fix.
+
+**The redirect is a pure function** resolveRedirect takes "signed in?" and the
+location and says where to go instead. No widgets and no context, so every
+branch has a unit test - including the ones that try to turn sign-in into an
+open redirect with a from= pointing somewhere else. It's synchronous on purpose
+as well: an async redirect would stop the history replace after a confirm from
+working.
+
+**The selection lives in the URL** /checkout?services=a,b&slot=x. A refresh or a
+shared link puts you back where you were, and it's what lets checkout survive
+the trip through sign-in. The card isn't in the URL - it defaults to the first
+saved card.
+
+**Ready before the first frame** The session is restored and the server has
+loaded its orders before runApp. Otherwise a signed-in refresh of an order page
+bounces through sign-in, and the first query can reach a server that hasn't
+loaded anything yet.
+
+**Screens don't know about the router** The feature package has no go_router in
+it. Screens take callbacks and the router in the app decides where they go - the
+router is the app's business, the same way the data layer doesn't know about the
+UI.
+
+**Simulated sign-in** One tap as the demo user, with a fixed id so order links
+keep working between sessions. Another name gets its own id, which is how you
+show that someone else's order link says not found. Signing out clears the
+GraphQL cache so the next person doesn't see the last one's data.
