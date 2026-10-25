@@ -1,33 +1,22 @@
 import 'package:ferry/ferry.dart';
 import 'package:graphql_api/graphql_api.dart';
-import 'package:local_backend/local_backend.dart';
 import 'package:test/test.dart';
+
+import 'contract_harness.dart';
 
 // Runs the real operation through the real in-app server and proves the
 // server's maps deserialise into the generated types.
 void main() {
-  late Client client;
+  late ContractHarness harness;
 
-  setUp(() => client = createGraphQLClient(link: LocalServerLink()));
-  tearDown(() => client.dispose());
+  setUp(() async => harness = await ContractHarness.start());
+  tearDown(() => harness.dispose());
 
   test('Services comes back as typed GServicesData', () async {
     final OperationResponse<GServicesData, GServicesVars> response =
-        await client
-            .request(GServicesReq())
-            // Stop at the server's answer, or at the first error: a response
-            // that doesn't fit the generated types surfaces as an error, not
-            // as data from the link.
-            .firstWhere(
-              (OperationResponse<GServicesData, GServicesVars> response) =>
-                  response.dataSource == DataSource.Link || response.hasErrors,
-            );
+        await harness.run(GServicesReq());
 
-    expect(
-      response.hasErrors,
-      isFalse,
-      reason: '${response.graphqlErrors} ${response.linkException}',
-    );
+    expect(response.hasErrors, isFalse, reason: describeErrors(response));
     final List<GServicesData_services> services = response.data!.services
         .toList();
     expect(services, isNotEmpty);
