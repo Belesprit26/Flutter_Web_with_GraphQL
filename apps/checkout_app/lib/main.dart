@@ -1,18 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 
-void main() {
-  runApp(const CheckoutApp());
-}
+import 'app.dart';
+import 'bootstrap.dart';
+import 'di/service_locator.dart';
 
-// Placeholder until the router and screens land.
-class CheckoutApp extends StatelessWidget {
-  const CheckoutApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Brightnook',
-      home: Scaffold(body: Center(child: Text('Brightnook'))),
-    );
-  }
+Future<void> main() async {
+  await bootstrap();
+  runApp(CheckoutApp(router: getIt<GoRouter>()));
 }

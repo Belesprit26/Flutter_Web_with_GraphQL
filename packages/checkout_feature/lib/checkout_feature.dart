@@ -17,3 +17,7 @@ export 'src/domain/entities/session.dart';
 export 'src/domain/repositories/repositories.dart';
 export 'src/domain/usecases/place_order_use_case.dart';
 export 'src/presentation/command.dart';
+export 'src/presentation/placeholder_screens.dart';
+export 'src/presentation/session/session_controller.dart';
+export 'src/presentation/shared/app_page.dart';
+export 'src/presentation/sign_in/sign_in_screen.dart';
