@@ -1,0 +1,135 @@
+# The contract between the app and its data source. Source of truth for the
+# generated client types and for what the in-app server must return.
+#
+# Money is Int cents end to end, never Float. Timestamps are ISO-8601 UTC
+# strings, mapped to DateTime in the client's data layer.
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Query {
+  services: [Service!]!
+  availableSlots(days: Int!): [Slot!]!
+  paymentMethods: [PaymentMethod!]!
+  "Null when the order doesn't exist or doesn't belong to the caller."
+  order(id: ID!): Order
+}
+
+type Mutation {
+  createOrder(input: CreateOrderInput!): CreateOrderPayload!
+}
+
+type Subscription {
+  "Emits the order's current state on subscribe, then every later change."
+  orderUpdated(id: ID!): Order!
+}
+
+type Service {
+  id: ID!
+  name: String!
+  description: String!
+  priceCents: Int!
+  durationMinutes: Int!
+}
+
+type Slot {
+  "Deterministic, e.g. slot-20261025-0800."
+  id: ID!
+  "ISO-8601 UTC."
+  startsAt: String!
+  endsAt: String!
+  available: Boolean!
+}
+
+enum CardBrand {
+  VISA
+  MASTERCARD
+}
+
+"A saved card token. Never a card number."
+type PaymentMethod {
+  id: ID!
+  brand: CardBrand!
+  last4: String!
+  expiryMonth: Int!
+  expiryYear: Int!
+  label: String!
+}
+
+input CreateOrderInput {
+  "Client-generated UUID v4, one per checkout attempt, reused on every retry."
+  idempotencyKey: ID!
+  serviceIds: [ID!]!
+  slotId: ID!
+  paymentMethodId: ID!
+}
+
+type CreateOrderPayload {
+  order: Order!
+  "True when this key was seen before and the original order is returned."
+  replayed: Boolean!
+}
+
+enum OrderStatus {
+  HOLD_PENDING
+  HOLD_PLACED
+  HOLD_FAILED
+}
+
+enum OrderEventType {
+  CREATED
+  HOLD_REQUESTED
+  HOLD_PLACED
+  HOLD_FAILED
+}
+
+type OrderEvent {
+  "Unique across all orders: the client cache normalises events by id."
+  id: ID!
+  type: OrderEventType!
+  at: String!
+  message: String
+}
+
+"Snapshotted at order time."
+type OrderItem {
+  serviceId: ID!
+  name: String!
+  priceCents: Int!
+}
+
+"""
+The slot as it was when the order was placed. No id on purpose: it stays
+embedded under its Order in the client cache instead of being merged with the
+live Slot, whose availability changes.
+"""
+type BookedSlot {
+  slotId: ID!
+  startsAt: String!
+  endsAt: String!
+}
+
+"Brand and last 4 at order time, embedded under its Order."
+type CardSnapshot {
+  paymentMethodId: ID!
+  brand: CardBrand!
+  last4: String!
+}
+
+type Order {
+  id: ID!
+  status: OrderStatus!
+  items: [OrderItem!]!
+  slot: BookedSlot!
+  card: CardSnapshot!
+  "Computed by the server from the service ids. Never trusted from the client."
+  totalCents: Int!
+  "ZAR."
+  currency: String!
+  timeline: [OrderEvent!]!
+  createdAt: String!
+  updatedAt: String!
+}

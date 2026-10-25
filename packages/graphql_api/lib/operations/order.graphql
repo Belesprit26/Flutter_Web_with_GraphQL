@@ -1,0 +1,50 @@
+fragment OrderFields on Order {
+  id
+  status
+  totalCents
+  currency
+  createdAt
+  updatedAt
+  items {
+    serviceId
+    name
+    priceCents
+  }
+  slot {
+    slotId
+    startsAt
+    endsAt
+  }
+  card {
+    paymentMethodId
+    brand
+    last4
+  }
+  timeline {
+    id
+    type
+    at
+    message
+  }
+}
+
+query OrderDetails($id: ID!) {
+  order(id: $id) {
+    ...OrderFields
+  }
+}
+
+mutation CreateOrder($input: CreateOrderInput!) {
+  createOrder(input: $input) {
+    replayed
+    order {
+      ...OrderFields
+    }
+  }
+}
+
+subscription OrderUpdated($id: ID!) {
+  orderUpdated(id: $id) {
+    ...OrderFields
+  }
+}

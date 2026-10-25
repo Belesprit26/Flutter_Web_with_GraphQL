@@ -1,0 +1,29 @@
+query Services {
+  services {
+    id
+    name
+    description
+    priceCents
+    durationMinutes
+  }
+}
+
+query AvailableSlots($days: Int!) {
+  availableSlots(days: $days) {
+    id
+    startsAt
+    endsAt
+    available
+  }
+}
+
+query PaymentMethods {
+  paymentMethods {
+    id
+    brand
+    last4
+    expiryMonth
+    expiryYear
+    label
+  }
+}
