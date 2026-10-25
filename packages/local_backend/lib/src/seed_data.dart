@@ -1,4 +1,35 @@
+import 'model/payment_method_record.dart';
 import 'model/service_record.dart';
+
+/// The saved cards every demo user has. Two succeed; the third always
+/// declines, so the failed-hold path can be shown.
+const List<PaymentMethodRecord> seedPaymentMethods = <PaymentMethodRecord>[
+  PaymentMethodRecord(
+    id: 'pm-visa-4242',
+    brand: 'VISA',
+    last4: '4242',
+    expiryMonth: 8,
+    expiryYear: 2029,
+    label: 'Personal Visa',
+  ),
+  PaymentMethodRecord(
+    id: 'pm-mastercard-5454',
+    brand: 'MASTERCARD',
+    last4: '5454',
+    expiryMonth: 3,
+    expiryYear: 2028,
+    label: 'Business Mastercard',
+  ),
+  PaymentMethodRecord(
+    id: 'pm-visa-0002',
+    brand: 'VISA',
+    last4: '0002',
+    expiryMonth: 11,
+    expiryYear: 2027,
+    label: 'Test card - always declines',
+    alwaysDeclines: true,
+  ),
+];
 
 /// The catalogue the server starts with. Prices are ZAR cents.
 const List<ServiceRecord> seedServices = <ServiceRecord>[
