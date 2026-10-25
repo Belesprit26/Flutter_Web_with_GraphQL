@@ -14,6 +14,7 @@ dependencies:
   flutter:
     sdk: flutter
   graphql_api: ^0.1.0
+  intl: ^0.20.3
   meta: ^1.19.0
   uuid: ^4.6.0
 
