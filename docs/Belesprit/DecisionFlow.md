@@ -208,3 +208,41 @@ UI.
 keep working between sessions. Another name gets its own id, which is how you
 show that someone else's order link says not found. Signing out clears the
 GraphQL cache so the next person doesn't see the last one's data.
+
+## Step 5 — Screens
+
+**Bare bones before polish** The first version of every screen is plain
+Material - a list, a few chips, a button. It's what the brief asks for and
+nothing else, and the styling goes in as its own commits after. If time runs
+out, the thing that's finished is the thing that was asked for.
+
+**One view model per page, made by the route** Each page gets a fresh view model
+when it opens and loses it when it closes. It's keyed on what the page is
+about - the order id, or the set of services - so picking a slot rewrites the
+URL without throwing the page away.
+
+**Confirm can't fire twice** The confirm button runs through a Command, and a
+Command ignores a second run while the first is going. The button greys out
+too, but that's for the user - the guard is what actually stops it. There's a
+test that presses it twice without waiting and checks one request went out.
+
+**Checkout looks at the attempt first** Before showing the form, checkout
+checks the saved attempt. If the last confirm never got its answer it says
+"Finishing your checkout..." and sends it again with the same key. If you've
+come back to a checkout that already became an order, it says so and links to
+it instead of showing a form you could submit again. Placing an order also
+replaces the history entry, but I'm not relying on that alone.
+
+**Pending, then placed** The order page shows the timeline with the hold step
+spinning until the bank answers. If it's taking more than 10 seconds it says
+it's safe to leave - it doesn't fail anything, because the server might still
+finish. A declined card shows the reason and a "Try again" that starts a fresh
+attempt.
+
+**Testing the flip** I wrote a test that goes through the whole journey on the
+real screens - pick 2 services, pick a slot, place the hold, watch it go from
+pending to placed. It got stuck on pending. The server had placed the hold and
+the subscription had delivered it - ferry's cache just needs a real turn of the
+event loop before the query re-emits, and Flutter's widget tests run on fake
+time. Letting a moment of real time pass fixed the test, and I ran the
+repository tests in a real Chrome to be sure the app itself was fine.
