@@ -127,3 +127,49 @@ generated in SAST, so someone reviewing this from another time zone sees the
 same times a customer here would. Slot ids are built from the date and hour so a
 slot in a URL means the same window on every load. One booking per slot, and a
 declined hold gives the slot back.
+
+## Step 3 — Domain and data
+
+**Result, and two kinds of error** Repositories hand back a Result - a value or
+a failure, never a thrown exception. Underneath, the data layer throws
+exceptions that say what went wrong, and one mapper turns them into failures
+that say what to tell the user. A user never sees a stack trace and a log line
+never says "something went wrong".
+
+**The key belongs to the attempt, not the click** The idempotency key gets
+minted once when a checkout attempt starts and it's saved before the request
+goes out. A retry, a refresh or a second tap all reuse it. I've built
+server-side idempotency before and the weak spot was the client making a fresh
+key per tap - the server can't tell a retry from a new order then. I checked the
+test would actually catch that by making the use case mint a key per click - the
+reload and retry cases both failed with two orders.
+
+**Single-flight** Two confirms for the same selection at the same moment share
+one request. Without it both would find no saved attempt, both make a key, and
+the server would quite correctly make two orders. Switching it off fails the
+headline test, which is the point of having it.
+
+**Unknown isn't no** A failed confirm is one of two things. A definite no - slot
+taken, bad input - means nothing was made, so the attempt goes back to draft and
+a changed selection gets a new key. A network failure means we don't know, so
+the attempt stays submitting and the next try reuses the key - the server either
+replays or creates, never both. That split is an exhaustive switch, so a new
+kind of failure has to pick a side.
+
+**Use cases revisited** There's one use case and it's PlaceOrder - it owns the
+whole attempt: confirm, resume after a reload and abandon after a decline. The
+reads go straight from the view model to the repository. A use case that only
+forwards a call is a file and a hop that does nothing, and here the logic all
+lives in one place.
+
+**One mapper for every order** OrderDetails, CreateOrder and OrderUpdated all
+select the same fragment, so the generated classes share an interface and one
+mapper covers all 3. An enum value the app doesn't know fails loudly instead of
+being guessed.
+
+**Watching an order is the repository's job** The repository watches the order
+query and keeps the subscription open until the order is final. ferry only
+writes subscription results to its cache while something is listening, and that
+cache write is what makes the query show the new status. The page doesn't know
+any of that - it gets orders. It only gets told "not found" once the server has
+said so, never while it's still loading.
