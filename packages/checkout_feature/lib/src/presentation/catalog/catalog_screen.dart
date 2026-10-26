@@ -59,6 +59,7 @@ class CatalogScreen extends StatelessWidget {
                           '${service.description}\n${service.duration.formatted}',
                         ),
                         isThreeLine: true,
+                        controlAffinity: ListTileControlAffinity.leading,
                         secondary: Text(service.price.formatted),
                       ),
                   ],

@@ -29,7 +29,15 @@ class AppPage extends StatelessWidget {
               TextButton(onPressed: onSignOut, child: const Text('Sign out')),
           ],
         ),
-        body: SafeArea(child: body),
+        body: SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: maxContentWidth),
+              child: body,
+            ),
+          ),
+        ),
       ),
     );
   }

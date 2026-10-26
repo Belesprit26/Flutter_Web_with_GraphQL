@@ -1,5 +1,5 @@
-/// Brightnook design tokens, theme, breakpoints and shared widgets.
-/// Flutter only, no business logic.
+/// Brightnook design tokens, theme and brand. Flutter only, no business logic.
 library;
 
 export 'src/brand.dart';
+export 'src/theme.dart';

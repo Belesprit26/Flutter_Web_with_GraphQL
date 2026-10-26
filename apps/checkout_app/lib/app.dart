@@ -12,7 +12,7 @@ class CheckoutApp extends StatelessWidget {
     return MaterialApp.router(
       title: brandName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFF2F6F5E)),
+      theme: AppTheme.light(),
       routerConfig: router,
     );
   }
