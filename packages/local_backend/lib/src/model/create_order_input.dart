@@ -13,9 +13,4 @@ class CreateOrderInput {
   final List<String> serviceIds;
   final String slotId;
   final String paymentMethodId;
-
-  /// The request as one canonical string. Same request, same fingerprint,
-  /// whatever order the services arrive in.
-  String get fingerprint =>
-      '${([...serviceIds]..sort()).join(',')}|$slotId|$paymentMethodId';
 }

@@ -14,7 +14,7 @@ type Query {
   services: [Service!]!
   availableSlots(days: Int!): [Slot!]!
   paymentMethods: [PaymentMethod!]!
-  "Null when the order doesn't exist or doesn't belong to the caller."
+  "Null when the order doesn't exist."
   order(id: ID!): Order
 }
 

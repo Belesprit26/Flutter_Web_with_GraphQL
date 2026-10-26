@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 dart_packages=(packages/graphql_api packages/local_backend)
-flutter_packages=(packages/design_system packages/checkout_feature apps/checkout_app)
+flutter_packages=(apps/checkout_app)
 
 has_tests() {
   [ -d "$1/test" ] && [ -n "$(find "$1/test" -name '*_test.dart' -print -quit)" ]

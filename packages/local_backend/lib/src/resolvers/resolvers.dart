@@ -6,39 +6,31 @@ import '../model/service_record.dart';
 import '../slot_schedule.dart';
 import 'resolver_context.dart';
 
-// Root field resolvers. They return the GraphQL shape as maps - this is the
-// only place in the project maps exist, and contract tests prove they fit the
-// generated client types.
+// Root field resolvers. They return the GraphQL shape as maps - the only place
+// in the project maps exist. Contract tests prove they fit the generated types.
 
 final Map<String, FieldResolver> queryResolvers = <String, FieldResolver>{
   'services': (ResolverContext context) async => <Object?>[
     for (final ServiceRecord service in context.server.services)
       service.toResponse(),
   ],
-  'availableSlots': (ResolverContext context) async {
-    final int days = parseDays(context.arguments['days']);
-    return <Object?>[
-      for (final (SlotWindow window, bool available) in context.server.slots(
-        days,
-      ))
-        window.toResponse(available: available),
-    ];
-  },
+  'availableSlots': (ResolverContext context) async => <Object?>[
+    for (final SlotWindow slot in context.server.slots(
+      parseDays(context.arguments['days']),
+    ))
+      slot.toResponse(),
+  ],
   'paymentMethods': (ResolverContext context) async {
-    final String userId = context.requireUser();
+    context.requireUser();
     return <Object?>[
-      for (final PaymentMethodRecord card in context.server.paymentMethodsFor(
-        userId,
-      ))
+      for (final PaymentMethodRecord card in context.server.paymentMethods)
         card.toResponse(),
     ];
   },
   'order': (ResolverContext context) async {
-    final String userId = context.requireUser();
-    final String orderId = parseId(context.arguments['id'], argument: 'id');
+    context.requireUser();
     final OrderRecord? order = await context.server.findOrder(
-      userId: userId,
-      orderId: orderId,
+      parseId(context.arguments['id'], argument: 'id'),
     );
     return order?.toResponse();
   },
@@ -46,9 +38,8 @@ final Map<String, FieldResolver> queryResolvers = <String, FieldResolver>{
 
 final Map<String, FieldResolver> mutationResolvers = <String, FieldResolver>{
   'createOrder': (ResolverContext context) async {
-    final String userId = context.requireUser();
     final CreateOrderResult result = await context.server.createOrder(
-      userId: userId,
+      userId: context.requireUser(),
       input: parseCreateOrderInput(context.arguments['input']),
     );
     return <String, Object?>{
@@ -62,10 +53,9 @@ final Map<String, FieldResolver> mutationResolvers = <String, FieldResolver>{
 final Map<String, SubscriptionResolver> subscriptionResolvers =
     <String, SubscriptionResolver>{
       'orderUpdated': (ResolverContext context) {
-        final String userId = context.requireUser();
-        final String orderId = parseId(context.arguments['id'], argument: 'id');
+        context.requireUser();
         return context.server
-            .watchOrder(userId: userId, orderId: orderId)
+            .watchOrder(parseId(context.arguments['id'], argument: 'id'))
             .map((OrderRecord order) => order.toResponse());
       },
     };

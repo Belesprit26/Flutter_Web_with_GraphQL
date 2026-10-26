@@ -6,7 +6,6 @@ import 'local_server.dart';
 import 'resolvers/resolver_context.dart';
 import 'resolvers/resolvers.dart';
 import 'server_exception.dart';
-import 'server_log.dart';
 
 /// The Link the GraphQL client talks to, in place of an HTTP link. It answers
 /// operations in-process: each root field goes to its resolver on the
@@ -17,14 +16,11 @@ class LocalServerLink extends Link {
     required LocalServer server,
     required String? Function() currentUserId,
     this.networkDelay = Duration.zero,
-    ServerLog log = ignoreServerEvents,
   }) : _server = server,
-       _currentUserId = currentUserId,
-       _log = log;
+       _currentUserId = currentUserId;
 
   final LocalServer _server;
   final String? Function() _currentUserId;
-  final ServerLog _log;
 
   /// Applied before a query or mutation reaches its resolver, never inside
   /// one. Without it a double click can't be shown and loading states flash
@@ -89,8 +85,7 @@ class LocalServerLink extends Link {
     } on ServerException catch (error) {
       yield _errorResponse(error.code, error.message);
       return;
-    } catch (error) {
-      _log('server.request.failed', <String, Object?>{'error': '$error'});
+    } catch (_) {
       yield _errorResponse(
         ErrorCodes.internal,
         'Something went wrong on the server.',

@@ -1,4 +1,4 @@
-import 'package:checkout_feature/checkout_feature.dart';
+import 'package:checkout_app/features/checkout/checkout.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

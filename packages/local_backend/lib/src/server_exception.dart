@@ -4,7 +4,6 @@ abstract final class ErrorCodes {
   static const String validationFailed = 'VALIDATION_FAILED';
   static const String slotUnavailable = 'SLOT_UNAVAILABLE';
   static const String paymentMethodInvalid = 'PAYMENT_METHOD_INVALID';
-  static const String idempotencyKeyReused = 'IDEMPOTENCY_KEY_REUSED';
   static const String notFound = 'NOT_FOUND';
   static const String notImplemented = 'NOT_IMPLEMENTED';
   static const String internal = 'INTERNAL';

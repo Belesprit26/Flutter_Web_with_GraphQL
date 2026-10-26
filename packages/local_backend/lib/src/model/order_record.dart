@@ -1,14 +1,13 @@
 import 'order_status.dart';
 
-/// An order as the server stores it. The idempotency key and request
-/// fingerprint live on the order itself, so the order and its key are saved
-/// in one write - there's no moment where one exists without the other.
+/// An order as the server stores it. The idempotency key lives on the order
+/// itself, so the order and its key are saved in one write - there's no moment
+/// where one exists without the other.
 class OrderRecord {
   const OrderRecord({
     required this.id,
     required this.userId,
     required this.idempotencyKey,
-    required this.fingerprint,
     required this.status,
     required this.items,
     required this.slot,
@@ -24,7 +23,6 @@ class OrderRecord {
   final String id;
   final String userId;
   final String idempotencyKey;
-  final String fingerprint;
   final OrderStatus status;
   final List<OrderItemRecord> items;
   final BookedSlotRecord slot;
@@ -53,7 +51,6 @@ class OrderRecord {
       id: id,
       userId: userId,
       idempotencyKey: idempotencyKey,
-      fingerprint: fingerprint,
       status: status,
       items: items,
       slot: slot,
@@ -101,7 +98,6 @@ class OrderRecord {
     'id': id,
     'userId': userId,
     'idempotencyKey': idempotencyKey,
-    'fingerprint': fingerprint,
     'status': status.wireName,
     'items': <Object?>[for (final OrderItemRecord item in items) item.toJson()],
     'slot': slot.toJson(),
@@ -122,7 +118,6 @@ class OrderRecord {
       'id': final String id,
       'userId': final String userId,
       'idempotencyKey': final String idempotencyKey,
-      'fingerprint': final String fingerprint,
       'status': final String status,
       'items': final List<Object?> items,
       'slot': final Object? slot,
@@ -138,7 +133,6 @@ class OrderRecord {
         id: id,
         userId: userId,
         idempotencyKey: idempotencyKey,
-        fingerprint: fingerprint,
         status: OrderStatus.fromWireName(status),
         items: <OrderItemRecord>[
           for (final Object? item in items) OrderItemRecord.fromJson(item),

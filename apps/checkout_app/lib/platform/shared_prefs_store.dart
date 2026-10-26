@@ -1,4 +1,4 @@
-import 'package:checkout_feature/checkout_feature.dart';
+import 'package:checkout_app/features/checkout/checkout.dart';
 import 'package:local_backend/local_backend.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

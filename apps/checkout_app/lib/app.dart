@@ -1,4 +1,4 @@
-import 'package:design_system/design_system.dart';
+import 'package:checkout_app/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 

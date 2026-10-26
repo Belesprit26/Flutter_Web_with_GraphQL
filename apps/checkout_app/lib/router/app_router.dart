@@ -1,4 +1,4 @@
-import 'package:checkout_feature/checkout_feature.dart';
+import 'package:checkout_app/features/checkout/checkout.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 

@@ -14,7 +14,6 @@ import 'model/service_record.dart';
 import 'order_state_machine.dart';
 import 'seed_data.dart';
 import 'server_exception.dart';
-import 'server_log.dart';
 import 'simulated_payment_gateway.dart';
 import 'slot_schedule.dart';
 
@@ -28,19 +27,17 @@ class CreateOrderResult {
   final bool replayed;
 }
 
-/// The in-app server. Owns the orders, the business rules, the simulated
-/// payment gateway and the change feed subscriptions listen to. It stands in
-/// for a real backend and knows nothing about the client.
+/// The in-app server: the orders, the business rules, the simulated payment
+/// gateway and the change feed subscriptions listen to. It stands in for a
+/// real backend and knows nothing about the client.
 class LocalServer {
   LocalServer._({
     required KeyValueStore store,
     required Clock clock,
     required Duration holdDelay,
-    required ServerLog log,
     required String Function() newOrderId,
   }) : _store = store,
        _clock = clock,
-       _log = log,
        _newOrderId = newOrderId,
        _schedule = SlotSchedule(clock: clock) {
     _gateway = SimulatedPaymentGateway(
@@ -50,37 +47,34 @@ class LocalServer {
         for (final PaymentMethodRecord card in seedPaymentMethods)
           if (card.alwaysDeclines) card.id,
       },
-      onAnswer: _onGatewayAnswer,
+      onAnswer: (String orderId, HoldOutcome outcome) =>
+          unawaited(settleHold(orderId, outcome)),
     );
   }
 
   /// Loads the stored orders and picks up every hold that was still pending
-  /// when the page went away. A browser refresh kills in-memory timers, so
-  /// without this a pending order would stay pending forever.
+  /// when the page went away. A refresh kills in-memory timers, so without
+  /// this a pending order would stay pending forever.
   static Future<LocalServer> start({
     required KeyValueStore store,
     Clock clock = const SystemClock(),
     Duration holdDelay = const Duration(milliseconds: 2500),
-    ServerLog log = ignoreServerEvents,
     String Function()? newOrderId,
   }) async {
     final LocalServer server = LocalServer._(
       store: store,
       clock: clock,
       holdDelay: holdDelay,
-      log: log,
       newOrderId: newOrderId ?? _randomOrderId,
     );
     await server._load();
     return server;
   }
 
-  static const String currency = 'ZAR';
   static const String _orderKeyPrefix = 'lb.v1.order.';
 
   final KeyValueStore _store;
   final Clock _clock;
-  final ServerLog _log;
   final String Function() _newOrderId;
   final SlotSchedule _schedule;
   late final SimulatedPaymentGateway _gateway;
@@ -93,35 +87,16 @@ class LocalServer {
   final StreamController<OrderRecord> _changes =
       StreamController<OrderRecord>.broadcast();
 
-  // Catalogue
-
   List<ServiceRecord> get services => seedServices;
 
-  /// Every demo user has the same saved cards.
-  List<PaymentMethodRecord> paymentMethodsFor(String userId) =>
-      seedPaymentMethods;
+  List<PaymentMethodRecord> get paymentMethods => seedPaymentMethods;
 
-  List<(SlotWindow, bool)> slots(int days) => <(SlotWindow, bool)>[
-    for (final SlotWindow window in _schedule.upcoming(days))
-      (window, _isBookable(window)),
-  ];
+  List<SlotWindow> slots(int days) => _schedule.upcoming(days);
 
-  // Orders
-
-  /// Null when the order doesn't exist or isn't the caller's - the two look
-  /// the same from outside. Falls back to storage when the order isn't in
-  /// memory, so an order created in another tab can still be opened.
-  Future<OrderRecord?> findOrder({
-    required String userId,
-    required String orderId,
-  }) async {
-    final OrderRecord? order =
-        _orders[orderId] ?? await _loadFromStorage(orderId);
-    if (order == null || order.userId != userId) {
-      return null;
-    }
-    return order;
-  }
+  /// Falls back to storage when the order isn't in memory, so an order made
+  /// in another tab can still be opened.
+  Future<OrderRecord?> findOrder(String orderId) async =>
+      _orders[orderId] ?? await _loadFromStorage(orderId);
 
   Future<CreateOrderResult> createOrder({
     required String userId,
@@ -140,11 +115,10 @@ class LocalServer {
     return result;
   }
 
-  /// The order now, then every change to it, ending once it's terminal.
-  Stream<OrderRecord> watchOrder({
-    required String userId,
-    required String orderId,
-  }) {
+  /// The order now, then every change, ending once it's terminal. It listens
+  /// for changes before reading the current state, so a hold that settles in
+  /// between can't be missed.
+  Stream<OrderRecord> watchOrder(String orderId) {
     final StreamController<OrderRecord> controller =
         StreamController<OrderRecord>();
     StreamSubscription<OrderRecord>? changes;
@@ -164,8 +138,6 @@ class LocalServer {
     }
 
     controller.onListen = () async {
-      // Listen for changes before reading the current state, so a hold that
-      // settles in between can't be missed.
       final List<OrderRecord> early = <OrderRecord>[];
       changes = _changes.stream
           .where((OrderRecord order) => order.id == orderId)
@@ -176,11 +148,7 @@ class LocalServer {
               emit(order);
             }
           });
-
-      final OrderRecord? current = await findOrder(
-        userId: userId,
-        orderId: orderId,
-      );
+      final OrderRecord? current = await findOrder(orderId);
       if (current == null) {
         controller.addError(
           const ServerException(ErrorCodes.notFound, 'Order not found.'),
@@ -196,7 +164,7 @@ class LocalServer {
 
   /// Applies the gateway's answer. Guarded: if the order isn't HOLD_PENDING
   /// any more - already settled, or a late or repeated answer - it's a no-op
-  /// that returns false, so a terminal order can never flip.
+  /// that returns false, so a finished order can never flip.
   @visibleForTesting
   Future<bool> settleHold(String orderId, HoldOutcome outcome) async {
     final OrderRecord? order = _orders[orderId];
@@ -209,7 +177,6 @@ class LocalServer {
     if (!OrderStateMachine.canTransition(order.status, next)) {
       throw IllegalTransition(orderId: orderId, from: order.status, to: next);
     }
-
     final OrderRecord settled = order.settled(
       status: next,
       at: _clock.now(),
@@ -222,12 +189,6 @@ class LocalServer {
     if (!_changes.isClosed) {
       _changes.add(settled);
     }
-    _log(
-      next == OrderStatus.holdPlaced
-          ? 'server.hold.placed'
-          : 'server.hold.failed',
-      <String, Object?>{'orderId': orderId},
-    );
     return true;
   }
 
@@ -236,47 +197,28 @@ class LocalServer {
     await _changes.close();
   }
 
-  // Steps 1 to 3 of createOrder run as one synchronous block, with no await
-  // between looking the key up and inserting the order. Dart runs a
-  // synchronous block to completion before anything else gets a turn, so two
-  // requests with the same key can't both miss the lookup. A database does
-  // the same job with a unique index on (user_id, idempotency_key) and
-  // INSERT ... ON CONFLICT.
+  // The replay lookup, the validation and the insert run as one synchronous
+  // block, with no await in between. Dart runs a synchronous block to the end
+  // before anything else gets a turn, so two requests with the same key can't
+  // both miss the lookup. A database does this with a unique index on
+  // (user_id, idempotency_key) and INSERT ... ON CONFLICT.
   CreateOrderResult _replayOrInsert(String userId, CreateOrderInput input) {
-    // 1. Replay first. The original was valid when it was made, so it isn't
-    //    validated again (its slot may have gone since).
+    // Replay first. The original was valid when it was made, so it isn't
+    // validated again.
     final String? existingId =
         _orderIdByKey[_keyFor(userId, input.idempotencyKey)];
     if (existingId != null) {
-      final OrderRecord original = _orders[existingId]!;
-      final Map<String, Object?> fields = <String, Object?>{
-        'orderId': original.id,
-        'idempotencyKey': input.idempotencyKey,
-      };
-      if (original.fingerprint != input.fingerprint) {
-        _log('server.order.key_reused_rejected', fields);
-        throw const ServerException(
-          ErrorCodes.idempotencyKeyReused,
-          'This idempotency key was already used for a different order.',
-        );
-      }
-      _log('server.order.replayed', fields);
-      return CreateOrderResult(order: original, replayed: true);
+      return CreateOrderResult(order: _orders[existingId]!, replayed: true);
     }
 
-    // 2. Validate against the current state.
-    final List<ServiceRecord> services = _validServices(input.serviceIds);
-    final SlotWindow slot = _validSlot(input.slotId);
-    final PaymentMethodRecord card = _validCard(userId, input.paymentMethodId);
-
-    // 3. Insert.
-    final OrderRecord order = _newOrder(userId, input, services, slot, card);
+    final OrderRecord order = _newOrder(
+      userId,
+      input,
+      _validServices(input.serviceIds),
+      _validSlot(input.slotId),
+      _validCard(input.paymentMethodId),
+    );
     _remember(order);
-    _log('server.order.created', <String, Object?>{
-      'orderId': order.id,
-      'idempotencyKey': input.idempotencyKey,
-      'fingerprint': input.fingerprint,
-    });
     return CreateOrderResult(order: order, replayed: false);
   }
 
@@ -299,47 +241,20 @@ class LocalServer {
     ];
   }
 
-  SlotWindow _validSlot(String id) {
-    final SlotWindow? slot = _schedule.parse(id);
-    if (slot == null) {
-      throw ServerException(ErrorCodes.validationFailed, 'Unknown slot "$id".');
-    }
-    if (!_isBookable(slot)) {
-      throw const ServerException(
+  SlotWindow _validSlot(String id) =>
+      _schedule.find(id) ??
+      (throw const ServerException(
         ErrorCodes.slotUnavailable,
-        'That time is no longer available. Pick another slot.',
-      );
-    }
-    return slot;
-  }
+        "That time isn't available any more. Pick another.",
+      ));
 
-  PaymentMethodRecord _validCard(String userId, String id) {
-    for (final PaymentMethodRecord card in paymentMethodsFor(userId)) {
-      if (card.id == id) {
-        return card;
-      }
-    }
-    throw const ServerException(
+  PaymentMethodRecord _validCard(String id) => paymentMethods.firstWhere(
+    (PaymentMethodRecord card) => card.id == id,
+    orElse: () => throw const ServerException(
       ErrorCodes.paymentMethodInvalid,
       "That card isn't one of your saved cards.",
-    );
-  }
-
-  /// In the future, inside the booking horizon, not closed, and not held by
-  /// another order that's still live. A failed hold frees its slot.
-  bool _isBookable(SlotWindow slot) {
-    final DateTime now = _clock.now();
-    return slot.startsAt.isAfter(now) &&
-        slot.startsAt.isBefore(
-          now.add(const Duration(days: SlotSchedule.maxDays + 1)),
-        ) &&
-        !SlotSchedule.closedBySeed(slot.id) &&
-        !_orders.values.any(
-          (OrderRecord order) =>
-              order.slot.slotId == slot.id &&
-              order.status != OrderStatus.holdFailed,
-        );
-  }
+    ),
+  );
 
   OrderRecord _newOrder(
     String userId,
@@ -357,7 +272,6 @@ class LocalServer {
       id: id,
       userId: userId,
       idempotencyKey: input.idempotencyKey,
-      fingerprint: input.fingerprint,
       status: OrderStatus.holdPending,
       items: <OrderItemRecord>[
         for (final ServiceRecord service in services)
@@ -377,12 +291,12 @@ class LocalServer {
         brand: card.brand,
         last4: card.last4,
       ),
-      // The server's total, from its own prices. The client's is an estimate.
+      // The server's total, from its own prices.
       totalCents: services.fold(
         0,
         (int total, ServiceRecord service) => total + service.priceCents,
       ),
-      currency: currency,
+      currency: 'ZAR',
       timeline: <OrderEventRecord>[
         OrderEventRecord(
           id: OrderRecord.eventId(id, 1),
@@ -403,79 +317,47 @@ class LocalServer {
     );
   }
 
-  void _onGatewayAnswer(String orderId, HoldOutcome outcome) {
-    unawaited(
-      settleHold(orderId, outcome).then<void>(
-        (_) {},
-        onError: (Object error, StackTrace stackTrace) {
-          _log('server.hold.settle_failed', <String, Object?>{
-            'orderId': orderId,
-            'error': '$error',
-          });
-        },
-      ),
-    );
-  }
-
   Future<void> _load() async {
     final Map<String, String> stored = await _store.readAll(
       prefix: _orderKeyPrefix,
     );
-    for (final MapEntry<String, String> entry in stored.entries) {
-      final OrderRecord? order = _parse(entry.key, entry.value);
+    for (final String raw in stored.values) {
+      final OrderRecord? order = _parse(raw);
       if (order != null) {
         _remember(order);
       }
     }
-    for (final OrderRecord order in _orders.values) {
-      _resumeIfPending(order);
-    }
+    _orders.values.forEach(_resumeIfPending);
   }
 
   Future<OrderRecord?> _loadFromStorage(String orderId) async {
-    final String key = '$_orderKeyPrefix$orderId';
-    final String? raw = await _store.read(key);
-    if (raw == null) {
-      return null;
-    }
-    final OrderRecord? order = _parse(key, raw);
-    if (order == null) {
-      return null;
-    }
-    // Memory may have caught up while storage was being read.
-    final OrderRecord? known = _orders[orderId];
-    if (known != null) {
-      return known;
+    final String? raw = await _store.read('$_orderKeyPrefix$orderId');
+    final OrderRecord? order = raw == null ? null : _parse(raw);
+    if (order == null || _orders.containsKey(orderId)) {
+      return _orders[orderId] ?? order;
     }
     _remember(order);
     _resumeIfPending(order);
     return order;
   }
 
-  /// A record that can't be read is skipped and logged, never a crash - one
-  /// bad record shouldn't take every other order down with it.
-  OrderRecord? _parse(String key, String raw) {
+  /// A record that can't be read is skipped, never a crash.
+  OrderRecord? _parse(String raw) {
     try {
       return OrderRecord.fromJson(jsonDecode(raw));
-    } on FormatException catch (error) {
-      _log('server.record.skipped', <String, Object?>{
-        'key': key,
-        'reason': error.message,
-      });
+    } on FormatException {
       return null;
     }
   }
 
   void _resumeIfPending(OrderRecord order) {
-    if (order.status != OrderStatus.holdPending) {
-      return;
+    if (order.status == OrderStatus.holdPending) {
+      _gateway.requestHold(
+        orderId: order.id,
+        paymentMethodId: order.card.paymentMethodId,
+        requestedAt: order.holdRequestedAt,
+      );
     }
-    _gateway.requestHold(
-      orderId: order.id,
-      paymentMethodId: order.card.paymentMethodId,
-      requestedAt: order.holdRequestedAt,
-    );
-    _log('server.hold.resumed_on_boot', <String, Object?>{'orderId': order.id});
   }
 
   void _remember(OrderRecord order) {

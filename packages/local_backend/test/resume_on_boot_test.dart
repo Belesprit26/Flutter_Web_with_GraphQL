@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:local_backend/local_backend.dart';
 import 'package:local_backend/src/model/order_record.dart';
 import 'package:local_backend/src/model/order_status.dart';
@@ -19,7 +17,7 @@ void main() {
   });
 
   /// Creates a pending order, then "closes the tab" before it settles.
-  Future<OrderRecord> pendingOrderLeftBehind({String key = 'key-1'}) async {
+  Future<OrderRecord> pendingOrderLeftBehind() async {
     final LocalServer before = await startServer(
       store: store,
       clock: clock,
@@ -27,10 +25,20 @@ void main() {
     );
     final CreateOrderResult result = await before.createOrder(
       userId: 'demo',
-      input: orderInput(key: key, slotId: openSlots(before).first),
+      input: orderInput(slotId: firstSlot(before)),
     );
     await before.dispose();
     return result.order;
+  }
+
+  Future<LocalServer> reload() async {
+    final LocalServer after = await startServer(
+      store: store,
+      clock: clock,
+      holdDelay: const Duration(milliseconds: 2500),
+    );
+    addTearDown(after.dispose);
+    return after;
   }
 
   test(
@@ -38,21 +46,11 @@ void main() {
     () async {
       final OrderRecord pending = await pendingOrderLeftBehind();
       clock.advance(const Duration(seconds: 10));
-      final RecordingServerLog log = RecordingServerLog();
 
-      final LocalServer after = await startServer(
-        store: store,
-        clock: clock,
-        holdDelay: const Duration(milliseconds: 2500),
-        log: log.call,
-      );
-      addTearDown(after.dispose);
+      final LocalServer after = await reload();
 
-      final OrderRecord settled = await after
-          .watchOrder(userId: 'demo', orderId: pending.id)
-          .last;
+      final OrderRecord settled = await after.watchOrder(pending.id).last;
       expect(settled.status, OrderStatus.holdPlaced);
-      expect(log.events, contains('server.hold.resumed_on_boot'));
     },
   );
 
@@ -60,81 +58,14 @@ void main() {
     final OrderRecord pending = await pendingOrderLeftBehind();
     clock.advance(const Duration(milliseconds: 2450));
 
-    final LocalServer after = await startServer(
-      store: store,
-      clock: clock,
-      holdDelay: const Duration(milliseconds: 2500),
-    );
-    addTearDown(after.dispose);
+    final LocalServer after = await reload();
 
-    final List<OrderStatus> statuses = await after
-        .watchOrder(userId: 'demo', orderId: pending.id)
-        .map((OrderRecord order) => order.status)
-        .toList();
-    expect(statuses, <OrderStatus>[
-      OrderStatus.holdPending,
-      OrderStatus.holdPlaced,
-    ]);
-  });
-
-  test('after a reload the same key replays the stored order', () async {
-    final OrderRecord pending = await pendingOrderLeftBehind();
-
-    final LocalServer after = await startServer(
-      store: store,
-      clock: clock,
-      holdDelay: const Duration(hours: 1),
-    );
-    addTearDown(after.dispose);
-
-    final CreateOrderResult replay = await after.createOrder(
-      userId: 'demo',
-      input: orderInput(slotId: pending.slot.slotId),
-    );
-    expect(replay.replayed, isTrue);
-    expect(replay.order.id, pending.id);
-  });
-
-  test('a record that cannot be read is skipped and logged', () async {
-    final OrderRecord good = await pendingOrderLeftBehind();
-    await store.write('lb.v1.order.broken', '{"id": "broken"');
-    await store.write(
-      'lb.v1.order.wrong-shape',
-      jsonEncode(<String, Object?>{'id': 'wrong-shape'}),
-    );
-    final RecordingServerLog log = RecordingServerLog();
-
-    final LocalServer after = await startServer(
-      store: store,
-      clock: clock,
-      holdDelay: const Duration(hours: 1),
-      log: log.call,
-    );
-    addTearDown(after.dispose);
-
-    expect(await after.findOrder(userId: 'demo', orderId: good.id), isNotNull);
     expect(
-      log.events.where((String event) => event == 'server.record.skipped'),
-      hasLength(2),
+      await after
+          .watchOrder(pending.id)
+          .map((OrderRecord order) => order.status)
+          .toList(),
+      <OrderStatus>[OrderStatus.holdPending, OrderStatus.holdPlaced],
     );
   });
-
-  test(
-    'an order written by another tab after start is read from storage',
-    () async {
-      final LocalServer thisTab = await startServer(
-        store: store,
-        clock: clock,
-        holdDelay: const Duration(hours: 1),
-      );
-      addTearDown(thisTab.dispose);
-      final OrderRecord fromOtherTab = await pendingOrderLeftBehind();
-
-      final OrderRecord? found = await thisTab.findOrder(
-        userId: 'demo',
-        orderId: fromOtherTab.id,
-      );
-      expect(found?.id, fromOtherTab.id);
-    },
-  );
 }

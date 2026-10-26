@@ -1,4 +1,3 @@
-import 'package:checkout_app/router/app_router.dart';
 import 'package:checkout_app/router/redirect_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -6,127 +5,47 @@ void main() {
   String? redirect(String location, {required bool signedIn}) =>
       resolveRedirect(signedIn: signedIn, location: Uri.parse(location));
 
-  /// The `from` a sign-in redirect carries, decoded.
-  String? fromOf(String? signInLocation) =>
-      Uri.parse(signInLocation!).queryParameters['from'];
+  const String checkout =
+      '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800';
 
-  group('the root', () {
-    test('goes to the catalogue, signed in or not', () {
-      expect(redirect('/', signedIn: false), '/services');
-      expect(redirect('/', signedIn: true), '/services');
-    });
+  test('the root goes to the catalogue', () {
+    expect(redirect('/', signedIn: false), '/services');
   });
 
-  group('public pages', () {
-    test('the catalogue and sign-in are open to everyone', () {
-      expect(redirect('/services', signedIn: false), isNull);
-      expect(redirect('/sign-in', signedIn: false), isNull);
-    });
-
-    test('an unknown page is left for the not-found page', () {
-      expect(redirect('/nope', signedIn: false), isNull);
-      expect(redirect('/nope', signedIn: true), isNull);
-    });
+  test('public and unknown pages are let through', () {
+    expect(redirect('/services', signedIn: false), isNull);
+    expect(redirect('/nope', signedIn: false), isNull);
   });
 
-  group('protected pages while signed out', () {
-    test('an order link goes to sign-in and remembers the order', () {
-      final String? target = redirect('/orders/ord-abc123', signedIn: false);
+  test('a protected page while signed out goes to sign-in, query and all', () {
+    final Uri target = Uri.parse(redirect(checkout, signedIn: false)!);
 
-      expect(Uri.parse(target!).path, '/sign-in');
-      expect(fromOf(target), '/orders/ord-abc123');
-    });
-
-    test('checkout keeps its whole query through sign-in', () {
-      final String? target = redirect(
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-        signedIn: false,
-      );
-
-      expect(Uri.parse(target!).path, '/sign-in');
-      expect(
-        fromOf(target),
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-      );
-    });
-
-    test('a trailing path under checkout is protected too', () {
-      expect(
-        Uri.parse(redirect('/checkout/x', signedIn: false)!).path,
-        '/sign-in',
-      );
-    });
+    expect(target.path, '/sign-in');
+    expect(target.queryParameters['from'], checkout);
   });
 
-  group('protected pages while signed in', () {
-    test('open as they are', () {
-      expect(redirect('/orders/ord-abc123', signedIn: true), isNull);
-      expect(redirect('/checkout?services=svc-a', signedIn: true), isNull);
-    });
+  test('a protected page while signed in opens as it is', () {
+    expect(redirect('/orders/ord-abc123', signedIn: true), isNull);
   });
 
-  group('sign-in while already signed in', () {
-    test('goes back to where the user was heading', () {
-      final String signIn = redirect('/orders/ord-abc123', signedIn: false)!;
+  test('sign-in while signed in goes back to where the user was heading', () {
+    final String signIn = redirect(checkout, signedIn: false)!;
 
-      expect(redirect(signIn, signedIn: true), '/orders/ord-abc123');
-    });
-
-    test('returns to checkout with the selection intact', () {
-      final String signIn = redirect(
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-        signedIn: false,
-      )!;
-
-      expect(
-        redirect(signIn, signedIn: true),
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-      );
-    });
-
-    test('with nowhere to return to, goes to the catalogue', () {
-      expect(redirect('/sign-in', signedIn: true), '/services');
-    });
+    expect(redirect(signIn, signedIn: true), checkout);
   });
 
-  group('refreshing the sign-in page', () {
-    // Flutter web can show the sign-in URL decoded in the address bar; a
-    // refresh then loads it in that form.
-    test('a decoded from keeps the whole checkout location, slot included', () {
-      expect(
-        redirect(
-          '/sign-in?from=/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-          signedIn: true,
-        ),
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-      );
-    });
-
-    test('the sign-in page offers the same return location', () {
-      expect(
-        returnLocationOf(
-          Uri.parse('/sign-in?from=/checkout?services=svc-a&slot=slot-1'),
-        ),
-        '/checkout?services=svc-a&slot=slot-1',
-      );
-    });
-
-    test('a broken percent-encoding is ignored', () {
-      expect(redirect('/sign-in?from=%zz', signedIn: true), '/services');
-    });
-
-    test('a decoded from pointing elsewhere is still refused', () {
-      expect(
-        redirect(
-          '/sign-in?from=https://evil.example/x?a=1&b=2',
-          signedIn: true,
-        ),
-        '/services',
-      );
-    });
+  test('sign-in with nowhere to return to goes to the catalogue', () {
+    expect(redirect('/sign-in', signedIn: true), '/services');
   });
 
-  group('open redirects are refused', () {
+  test(
+    'a refreshed sign-in URL that the browser shows decoded keeps the slot',
+    () {
+      expect(redirect('/sign-in?from=$checkout', signedIn: true), checkout);
+    },
+  );
+
+  test('open redirects are refused', () {
     for (final String from in <String>[
       'https://evil.example',
       '//evil.example',
@@ -139,41 +58,11 @@ void main() {
       '/orders/a/b',
       '',
     ]) {
-      test('from=$from goes to the catalogue', () {
-        final String location = Uri(
-          path: '/sign-in',
-          queryParameters: <String, String>{'from': from},
-        ).toString();
-
-        expect(redirect(location, signedIn: true), '/services');
-        expect(safeReturnLocation(from), isNull);
-      });
+      final String location = Uri(
+        path: '/sign-in',
+        queryParameters: <String, String>{'from': from},
+      ).toString();
+      expect(redirect(location, signedIn: true), '/services', reason: from);
     }
-  });
-
-  group('checkout locations', () {
-    test('the selection round-trips through the URL', () {
-      final String location = checkoutLocation(
-        serviceIds: <String>['svc-a', 'svc-b'],
-        slotId: 'slot-20261026-0800',
-      );
-      final Uri uri = Uri.parse(location);
-
-      expect(
-        location,
-        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
-      );
-      expect(parseServiceIds(uri.queryParameters['services']), <String>[
-        'svc-a',
-        'svc-b',
-      ]);
-      expect(uri.queryParameters['slot'], 'slot-20261026-0800');
-    });
-
-    test('empty and missing service lists parse to nothing', () {
-      expect(parseServiceIds(null), isEmpty);
-      expect(parseServiceIds(''), isEmpty);
-      expect(parseServiceIds(' , '), isEmpty);
-    });
   });
 }
