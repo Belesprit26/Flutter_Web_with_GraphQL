@@ -89,6 +89,43 @@ void main() {
     });
   });
 
+  group('refreshing the sign-in page', () {
+    // Flutter web can show the sign-in URL decoded in the address bar; a
+    // refresh then loads it in that form.
+    test('a decoded from keeps the whole checkout location, slot included', () {
+      expect(
+        redirect(
+          '/sign-in?from=/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
+          signedIn: true,
+        ),
+        '/checkout?services=svc-a,svc-b&slot=slot-20261026-0800',
+      );
+    });
+
+    test('the sign-in page offers the same return location', () {
+      expect(
+        returnLocationOf(
+          Uri.parse('/sign-in?from=/checkout?services=svc-a&slot=slot-1'),
+        ),
+        '/checkout?services=svc-a&slot=slot-1',
+      );
+    });
+
+    test('a broken percent-encoding is ignored', () {
+      expect(redirect('/sign-in?from=%zz', signedIn: true), '/services');
+    });
+
+    test('a decoded from pointing elsewhere is still refused', () {
+      expect(
+        redirect(
+          '/sign-in?from=https://evil.example/x?a=1&b=2',
+          signedIn: true,
+        ),
+        '/services',
+      );
+    });
+  });
+
   group('open redirects are refused', () {
     for (final String from in <String>[
       'https://evil.example',

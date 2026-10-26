@@ -19,10 +19,33 @@ String? resolveRedirect({required bool signedIn, required Uri location}) {
   }
 
   if (signedIn && path == '/sign-in') {
-    return safeReturnLocation(location.queryParameters['from']) ?? '/services';
+    return returnLocationOf(location) ?? '/services';
   }
 
   return null;
+}
+
+/// Where a `/sign-in` location says to go back to, if it's safe.
+///
+/// Everything after `from=` is the return location. Flutter web can write
+/// the URL back to the address bar decoded, which turns
+/// `from=%2Fcheckout%3Fservices%3Da%26slot%3Dx` into
+/// `from=/checkout?services=a&slot=x` - and a refresh then reads `slot` as a
+/// separate parameter of the sign-in page. Taking the raw rest of the query
+/// works for both forms, so the slot survives a refresh on sign-in.
+String? returnLocationOf(Uri signIn) {
+  const String prefix = 'from=';
+  final String query = signIn.query;
+  if (!query.startsWith(prefix)) {
+    return safeReturnLocation(signIn.queryParameters['from']);
+  }
+  try {
+    return safeReturnLocation(
+      Uri.decodeComponent(query.substring(prefix.length)),
+    );
+  } on ArgumentError {
+    return null; // A broken percent-encoding: ignore it.
+  }
 }
 
 /// [from] if it's a page in this app, otherwise null. Stops

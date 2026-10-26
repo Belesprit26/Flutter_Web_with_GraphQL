@@ -117,7 +117,7 @@ GoRouter buildRouter({
         path: '/sign-in',
         builder: (BuildContext context, GoRouterState state) => SignInScreen(
           session: session,
-          returnTo: safeReturnLocation(state.uri.queryParameters['from']),
+          returnTo: returnLocationOf(state.uri),
         ),
       ),
     ],
