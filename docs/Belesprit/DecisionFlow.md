@@ -241,8 +241,38 @@ attempt.
 
 **Testing the flip** I wrote a test that goes through the whole journey on the
 real screens - pick 2 services, pick a slot, place the hold, watch it go from
-pending to placed. It got stuck on pending. The server had placed the hold and
-the subscription had delivered it - ferry's cache just needs a real turn of the
-event loop before the query re-emits, and Flutter's widget tests run on fake
-time. Letting a moment of real time pass fixed the test, and I ran the
-repository tests in a real Chrome to be sure the app itself was fine.
+pending to placed. It got stuck on pending. I used AI to trace it one step at a
+time - the server had placed the hold and the subscription had delivered it,
+ferry's cache just needs a real turn of the event loop before the query
+re-emits, and Flutter's widget tests run on fake time. Letting a moment of real
+time pass fixed the test, and I ran the repository tests in a real Chrome to be
+sure the app itself was fine.
+
+## Step 6 — Robustness
+
+**The address bar lied a little** When you open a checkout link while signed
+out, the sign-in URL carries where you were going in from=. Flutter web writes
+that URL back to the address bar decoded, so a checkout link with a slot turns
+into what looks like two parameters - refresh the sign-in page and the slot
+falls off. It showed up in a screenshot while I was testing. The fix reads
+everything after from= as the return location, so it works whichever way the
+URL comes back, and it still has to be a page in the app.
+
+**Release build, real server** The dev server forgives a lot, so I checked the
+release build behind a server that does what production hosting has to do -
+send index.html for any path that isn't a file. Without that, a refresh on an
+order page is a 404 from the host before Flutter even loads. tool/serve_web.dart
+does it in plain Dart so there's nothing extra to install.
+
+## Step 7 — Finishing
+
+**Past the deadline, so I cut** The deadline went by, so I switched to finishing
+what's there. The plan had a design system with shared widgets, a two-column
+checkout on wide screens, a bundled font, CI, a debug panel and a live deploy.
+All of that is out. What's in is a minimal theme so it doesn't look like the
+default template, and a centred column so wide screens don't stretch. SOLUTION
+lists what I'd do next.
+
+**Mobile** It ran on an Android emulator as a release build - the emulator didn't
+have room for the debug build, which is 150 MB. The iOS build compiles, but I
+didn't click through it on the simulator.
